@@ -15,17 +15,26 @@ def find_test_files(directory):
     return test_files
 
 def extract_test_functions(file_path):
-    """Extract all functions containing 'test' in their name from a given Python file."""
-    test_functions = []
+    """Extract all functions containing 'test' in their name from a given Python file,
+    including those inside test classes."""
+    test_cases = []
     with open(file_path, "r", encoding="utf-8") as f:
         try:
             tree = ast.parse(f.read(), filename=file_path)
+            
             for node in ast.walk(tree):
                 if isinstance(node, ast.FunctionDef) and "test" in node.name.lower():
-                    test_functions.append(node.name)
+                    test_cases.append((None, node.name))  # Standalone function
+                
+                elif isinstance(node, ast.ClassDef):
+                    class_name = node.name
+                    for child in node.body:
+                        if isinstance(child, ast.FunctionDef) and "test" in child.name.lower():
+                            test_cases.append((class_name, child.name))  # Function inside class
         except SyntaxError:
             print(f"Skipping {file_path} due to syntax errors.")
-    return test_functions
+    
+    return test_cases
 
 def main(directory, output_file="test_list.txt"):
     """Find all test files, extract test functions, and write to a file."""
@@ -35,8 +44,11 @@ def main(directory, output_file="test_list.txt"):
     with open(output_file, "w", encoding="utf-8") as f:
         for test_file in test_files:
             test_functions = extract_test_functions(test_file)
-            for test_function in test_functions:
-                f.write(f"{test_file}::{test_function}\n")
+            for class_name, test_function in test_functions:
+                if class_name:
+                    f.write(f"{test_file}::{class_name}::{test_function}\n")
+                else:
+                    f.write(f"{test_file}::{test_function}\n")
                 test_count += 1
 
     print(f"Results saved to {output_file}")
